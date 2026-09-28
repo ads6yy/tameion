@@ -17,6 +17,11 @@ class Chaine:
     def solde_wei(self, adresse: str) -> int:
         return self.w3.eth.get_balance(Web3.to_checksum_address(adresse))
 
+    def solde_au_dernier_bloc(self, adresse: str) -> tuple[int, int]:
+        """(numéro de bloc, solde en wei à ce bloc) : le constat est rattaché à un bloc précis."""
+        bloc = self.w3.eth.block_number
+        return bloc, self.w3.eth.get_balance(Web3.to_checksum_address(adresse), block_identifier=bloc)
+
     def frais_max(self) -> tuple[int, int]:
         """(maxFeePerGas, maxPriorityFeePerGas). Sous 20 Gwei, Arc jette la transaction sans erreur."""
         base = max(self.w3.eth.get_block("latest")["baseFeePerGas"], self.min_base_fee)

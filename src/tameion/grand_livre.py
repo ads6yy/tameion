@@ -11,6 +11,12 @@ COMPTE_GAS = "Expenses:Frais:Gas"
 COMPTE_APPORT = "Equity:Apport"
 
 
+def constat_rapprochement(jour, compte: str, solde: Decimal, bloc: int) -> str:
+    """Directive `custom` et non `balance` : une assertion beancount vaut pour toute une journée
+    et deviendrait fausse à la première opération suivante du même jour."""
+    return f'{jour} custom "rapprochement" {compte} {solde:f} USDC\n  bloc: "{bloc}"'
+
+
 class GrandLivre:
     def __init__(self, chemin: Path):
         self.chemin = chemin

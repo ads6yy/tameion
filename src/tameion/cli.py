@@ -1,7 +1,7 @@
 """Commandes : init, factures, comptabiliser, payer, rapprocher, verifier."""
 import argparse
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from eth_account import Account
@@ -9,7 +9,14 @@ from eth_account import Account
 from . import config as cfg
 from .chaine import Chaine
 from .controles import controler_facture, controler_paiement
-from .grand_livre import COMPTE_APPORT, COMPTE_FOURNISSEURS, COMPTE_GAS, COMPTE_TRESORERIE, GrandLivre
+from .grand_livre import (
+    COMPTE_APPORT,
+    COMPTE_FOURNISSEURS,
+    COMPTE_GAS,
+    COMPTE_TRESORERIE,
+    GrandLivre,
+    constat_rapprochement,
+)
 from .montants import usdc_vers_wei, wei_vers_usdc
 
 
@@ -53,14 +60,15 @@ def cmd_init(c: cfg.Config, _args) -> None:
     gl = GrandLivre(c.ledger)
     if gl.a_un_apport():
         raise SystemExit("Apport initial déjà enregistré.")
-    solde = wei_vers_usdc(_chaine(c).solde_wei(c.adresse_wallet))
+    bloc, solde_wei = _chaine(c).solde_au_dernier_bloc(c.adresse_wallet)
+    solde = wei_vers_usdc(solde_wei)
     aujourdhui = date.today()
     gl.ajouter(
         f'{aujourdhui} * "Apport initial" "Solde constaté sur Arc testnet"\n'
         f'  nature: "apport"\n'
         f"  {COMPTE_TRESORERIE}  {solde:f} USDC\n"
         f"  {COMPTE_APPORT}  {-solde:f} USDC\n\n"
-        f"{aujourdhui + timedelta(days=1)} balance {COMPTE_TRESORERIE}  {solde:f} USDC"
+        + constat_rapprochement(aujourdhui, COMPTE_TRESORERIE, solde, bloc)
     )
     print(f"Apport initial enregistré : {solde:f} USDC")
 
@@ -163,18 +171,18 @@ def cmd_payer(c: cfg.Config, args) -> None:
 
 def cmd_rapprocher(c: cfg.Config, _args) -> None:
     gl = GrandLivre(c.ledger)
-    onchain = wei_vers_usdc(_chaine(c).solde_wei(c.adresse_wallet))
+    bloc, solde_wei = _chaine(c).solde_au_dernier_bloc(c.adresse_wallet)
+    onchain = wei_vers_usdc(solde_wei)
     livre = gl.solde(COMPTE_TRESORERIE)
-    print(f"Solde onchain       : {onchain:f} USDC")
+    print(f"Solde onchain       : {onchain:f} USDC (bloc {bloc})")
     print(f"Solde grand livre   : {livre} USDC")
     if onchain != livre:
         raise SystemExit(
             f"ÉCART de {onchain - livre} USDC : une opération manque ou est fausse dans le grand livre. "
             "Rien n'a été écrit."
         )
-    # Une assertion beancount porte sur le début de sa journée : on la date du lendemain.
-    gl.ajouter(f"{date.today() + timedelta(days=1)} balance {COMPTE_TRESORERIE}  {onchain:f} USDC")
-    print("Rapproché : assertion de solde ajoutée.")
+    gl.ajouter(constat_rapprochement(date.today(), COMPTE_TRESORERIE, onchain, bloc))
+    print(f"Rapproché : constat ajouté au grand livre (bloc {bloc}).")
 
 
 def cmd_verifier(c: cfg.Config, _args) -> None:
