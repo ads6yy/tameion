@@ -1,0 +1,5 @@
+{
+  "BC-001": {"fournisseur": "studio-alpha", "montant": "0.250000", "objet": "Maquettes landing page", "recu_le": "2026-09-25"},
+  "BC-002": {"fournisseur": "dev-beta", "montant": "0.400000", "objet": "Intégration API", "recu_le": "2026-09-26"},
+  "BC-003": {"fournisseur": "studio-alpha", "montant": "0.300000", "objet": "Déclinaisons réseaux sociaux", "recu_le": null}
+}

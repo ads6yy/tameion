@@ -1,0 +1,27 @@
+# --- Secrets : ne jamais commiter ---
+.env
+.env.*
+!.env.example
+wallet.yaml
+*.key
+*.pem
+
+# --- Python / uv ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Node (Circle CLI) ---
+node_modules/
+npm-debug.log*
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store

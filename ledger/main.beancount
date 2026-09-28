@@ -1,0 +1,22 @@
+; Grand livre Tameion (données factices, Arc testnet).
+; Ne pas éditer à la main pendant un test : les commandes `tameion` y ajoutent les écritures.
+
+option "title" "Tameion (test)"
+option "operating_currency" "USDC"
+
+2026-09-01 commodity USDC
+  precision: "18 décimales en natif sur Arc, 6 via l'interface ERC-20"
+
+2026-09-01 open Assets:Arc:Tresorerie              USDC
+2026-09-01 open Liabilities:Fournisseurs           USDC
+2026-09-01 open Expenses:Prestataires:Design       USDC
+2026-09-01 open Expenses:Prestataires:Developpement USDC
+2026-09-01 open Expenses:Frais:Gas                 USDC
+2026-09-01 open Equity:Apport                      USDC
+
+2026-09-28 * "Apport initial" "Solde constaté sur Arc testnet"
+  nature: "apport"
+  Assets:Arc:Tresorerie  5.000000000000000000 USDC
+  Equity:Apport  -5.000000000000000000 USDC
+
+2026-09-29 balance Assets:Arc:Tresorerie  5.000000000000000000 USDC
