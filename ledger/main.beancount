@@ -38,3 +38,17 @@ option "operating_currency" "USDC"
   Liabilities:Fournisseurs  0.250000 USDC
   Expenses:Frais:Gas  0.000525000000000000 USDC
   Assets:Arc:Tresorerie  -0.250525000000000000 USDC
+
+2026-09-28 custom "rapprochement" Assets:Arc:Tresorerie 4.498950000000000000 USDC
+  bloc: "64490674"
+
+2026-09-28 * "Faucet Circle" "Recharge testnet"
+  nature: "apport"
+  tx_hash: "0xbe742fba7eddadecd46b1450ce40946b75593e12a877251b047b4b0d628faa42"
+  bloc: "64490915"
+  expediteur: "0xD4c0B787aA2ff9Eb751Bb515c877EbBF2Daddaae"
+  Assets:Arc:Tresorerie  20.000000000000000000 USDC
+  Equity:Apport  -20.000000000000000000 USDC
+
+2026-09-28 custom "rapprochement" Assets:Arc:Tresorerie 24.498950000000000000 USDC
+  bloc: "64491367"
