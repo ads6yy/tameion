@@ -20,3 +20,19 @@ option "operating_currency" "USDC"
   Equity:Apport  -5.000000000000000000 USDC
 
 2026-09-29 balance Assets:Arc:Tresorerie  5.000000000000000000 USDC
+
+2026-09-26 * "Studio Alpha" "Facture F-001 : Maquettes landing page"
+  nature: "facture"
+  facture: "F-001"
+  commande: "BC-001"
+  document: "data/factures/F-001.json"
+  Expenses:Prestataires:Design  0.250000 USDC
+  Liabilities:Fournisseurs  -0.250000 USDC
+
+2026-09-27 * "Dev Beta" "Facture F-002 : Intégration API"
+  nature: "facture"
+  facture: "F-002"
+  commande: "BC-002"
+  document: "data/factures/F-002.json"
+  Expenses:Prestataires:Developpement  0.400000 USDC
+  Liabilities:Fournisseurs  -0.400000 USDC
