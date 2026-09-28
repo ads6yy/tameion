@@ -1,1 +1,1 @@
-"""Tameion : squelette grand livre beancount + paiements USDC sur Arc testnet."""
+"""Tameion: beancount ledger + USDC payments on Arc testnet."""

@@ -1,7 +1,7 @@
 [project]
 name = "tameion"
 version = "0.1.0"
-description = "Squelette : grand livre beancount + paiements USDC sur Arc testnet"
+description = "Test skeleton: beancount ledger + USDC payments on Arc testnet"
 requires-python = ">=3.12"
 dependencies = [
     "beancount>=3.2.3",

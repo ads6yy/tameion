@@ -1,4 +1,4 @@
-# Configuration non secrète. La clé privée vient de la variable d'environnement TAMEION_PRIVATE_KEY.
+# Non-secret configuration. The private key comes from the TAMEION_PRIVATE_KEY environment variable.
 [chain]
 rpc_url = "https://rpc.testnet.arc.io"
 chain_id = 5042002
@@ -9,12 +9,12 @@ min_base_fee_gwei = 20
 address = "0x60a60DC1535ACb64a88368115D361A9d5c456d02"
 
 [controls]
-# Plafond par paiement : au-delà, l'outil refuse (pas de confirmation possible).
+# Per-payment cap: above it the tool refuses (no override possible).
 max_payment_usdc = "0.50"
 
 [paths]
 ledger = "ledger/main.beancount"
-fournisseurs = "data/fournisseurs.json"
-commandes = "data/commandes.json"
-factures = "data/factures"
-envois = "data/envois.jsonl"
+vendors = "data/vendors.json"
+purchase_orders = "data/purchase_orders.json"
+invoices = "data/invoices"
+sends = "data/sends.jsonl"

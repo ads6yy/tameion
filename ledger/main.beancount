@@ -1,54 +1,57 @@
-; Grand livre Tameion (données factices, Arc testnet).
-; Ne pas éditer à la main pendant un test : les commandes `tameion` y ajoutent les écritures.
+; Tameion ledger (fake data, Arc testnet).
+; Do not edit by hand during a test: `tameion` commands append entries to it.
 
 option "title" "Tameion (test)"
 option "operating_currency" "USDC"
 
 2026-09-01 commodity USDC
-  precision: "18 décimales en natif sur Arc, 6 via l'interface ERC-20"
+  precision: "18 decimals natively on Arc, 6 through the ERC-20 interface"
 
-2026-09-01 open Assets:Arc:Tresorerie              USDC
-2026-09-01 open Liabilities:Fournisseurs           USDC
-2026-09-01 open Expenses:Prestataires:Design       USDC
-2026-09-01 open Expenses:Prestataires:Developpement USDC
-2026-09-01 open Expenses:Frais:Gas                 USDC
-2026-09-01 open Equity:Apport                      USDC
+2026-09-01 open Assets:Arc:Treasury              USDC
+2026-09-01 open Liabilities:AccountsPayable           USDC
+2026-09-01 open Expenses:Contractors:Design       USDC
+2026-09-01 open Expenses:Contractors:Development USDC
+2026-09-01 open Expenses:Fees:Gas                 USDC
+2026-09-01 open Equity:Contributions                      USDC
 
-2026-09-28 * "Apport initial" "Solde constaté sur Arc testnet"
-  nature: "apport"
-  Assets:Arc:Tresorerie  4.749475000000000000 USDC
-  Equity:Apport  -4.749475000000000000 USDC
+2026-09-28 * "Initial contribution" "Balance observed on Arc testnet"
+  kind: "contribution"
+  Assets:Arc:Treasury  4.749475000000000000 USDC
+  Equity:Contributions  -4.749475000000000000 USDC
 
-2026-09-28 custom "rapprochement" Assets:Arc:Tresorerie 4.749475000000000000 USDC
-  bloc: "64490141"
+2026-09-28 custom "reconciliation" Assets:Arc:Treasury 4.749475000000000000 USDC
+  block: "64490141"
 
-2026-09-26 * "Studio Alpha" "Facture F-001 : Maquettes landing page"
-  nature: "facture"
-  facture: "F-001"
-  commande: "BC-001"
-  document: "data/factures/F-001.json"
-  Expenses:Prestataires:Design  0.250000 USDC
-  Liabilities:Fournisseurs  -0.250000 USDC
+2026-09-26 * "Studio Alpha" "Invoice F-001: Landing page mockups"
+  kind: "invoice"
+  invoice: "F-001"
+  purchase_order: "PO-001"
+  document: "data/invoices/F-001.json"
+  Expenses:Contractors:Design  0.250000 USDC
+  Liabilities:AccountsPayable  -0.250000 USDC
 
-2026-09-28 * "Studio Alpha" "Paiement F-001"
-  nature: "paiement"
-  facture: "F-001"
+2026-09-28 * "Studio Alpha" "Payment F-001"
+  kind: "payment"
+  invoice: "F-001"
   tx_hash: "0x8efb951b11ef1f7adadd5fdec3d43b20aa6a7a1ac561fde71168b5011597a84b"
-  bloc: "64490240"
-  Liabilities:Fournisseurs  0.250000 USDC
-  Expenses:Frais:Gas  0.000525000000000000 USDC
-  Assets:Arc:Tresorerie  -0.250525000000000000 USDC
+  block: "64490240"
+  Liabilities:AccountsPayable  0.250000 USDC
+  Expenses:Fees:Gas  0.000525000000000000 USDC
+  Assets:Arc:Treasury  -0.250525000000000000 USDC
 
-2026-09-28 custom "rapprochement" Assets:Arc:Tresorerie 4.498950000000000000 USDC
-  bloc: "64490674"
+2026-09-28 custom "reconciliation" Assets:Arc:Treasury 4.498950000000000000 USDC
+  block: "64490674"
 
-2026-09-28 * "Faucet Circle" "Recharge testnet"
-  nature: "apport"
+2026-09-28 * "Circle faucet" "Testnet top-up"
+  kind: "contribution"
   tx_hash: "0xbe742fba7eddadecd46b1450ce40946b75593e12a877251b047b4b0d628faa42"
-  bloc: "64490915"
-  expediteur: "0xD4c0B787aA2ff9Eb751Bb515c877EbBF2Daddaae"
-  Assets:Arc:Tresorerie  20.000000000000000000 USDC
-  Equity:Apport  -20.000000000000000000 USDC
+  block: "64490915"
+  sender: "0xD4c0B787aA2ff9Eb751Bb515c877EbBF2Daddaae"
+  Assets:Arc:Treasury  20.000000000000000000 USDC
+  Equity:Contributions  -20.000000000000000000 USDC
 
-2026-09-28 custom "rapprochement" Assets:Arc:Tresorerie 24.498950000000000000 USDC
-  bloc: "64491367"
+2026-09-28 custom "reconciliation" Assets:Arc:Treasury 24.498950000000000000 USDC
+  block: "64491367"
+
+2026-09-28 custom "reconciliation" Assets:Arc:Treasury 24.498950000000000000 USDC
+  block: "64492559"

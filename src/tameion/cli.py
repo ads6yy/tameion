@@ -1,4 +1,4 @@
-"""Commandes : init, factures, comptabiliser, payer, rapprocher, verifier."""
+"""Commands: init, invoices, book, pay, reconcile, check."""
 import argparse
 import json
 from datetime import date, datetime, timezone
@@ -7,204 +7,204 @@ from decimal import Decimal
 from eth_account import Account
 
 from . import config as cfg
-from .chaine import Chaine
-from .controles import controler_facture, controler_paiement
-from .grand_livre import (
-    COMPTE_APPORT,
-    COMPTE_FOURNISSEURS,
-    COMPTE_GAS,
-    COMPTE_TRESORERIE,
-    GrandLivre,
-    constat_rapprochement,
+from .amounts import usdc_to_wei, wei_to_usdc
+from .chain import Chain
+from .controls import check_invoice, check_payment
+from .ledger import (
+    CONTRIBUTION_ACCOUNT,
+    GAS_ACCOUNT,
+    PAYABLE_ACCOUNT,
+    TREASURY_ACCOUNT,
+    Ledger,
+    reconciliation_record,
 )
-from .montants import usdc_vers_wei, wei_vers_usdc
 
 
-def _lire_json(chemin):
-    return json.loads(chemin.read_text(encoding="utf-8"))
+def _read_json(path):
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _factures(c: cfg.Config) -> dict[str, dict]:
-    return {f["id"]: f for f in (_lire_json(p) for p in sorted(c.factures.glob("*.json")))}
+def _invoices(c: cfg.Config) -> dict[str, dict]:
+    return {i["id"]: i for i in (_read_json(p) for p in sorted(c.invoices.glob("*.json")))}
 
 
-def _facture(c: cfg.Config, fid: str) -> dict:
-    factures = _factures(c)
-    if fid not in factures:
-        raise SystemExit(f"Facture inconnue : {fid}")
-    return factures[fid]
+def _invoice(c: cfg.Config, invoice_id: str) -> dict:
+    invoices = _invoices(c)
+    if invoice_id not in invoices:
+        raise SystemExit(f"Unknown invoice: {invoice_id}")
+    return invoices[invoice_id]
 
 
-def _envois_en_attente(c: cfg.Config) -> dict[str, str]:
-    """Dernier statut par facture ; 'envoye' sans 'confirme'/'echec' = en attente."""
-    dernier: dict[str, dict] = {}
-    if c.envois.exists():
-        for ligne in c.envois.read_text(encoding="utf-8").splitlines():
-            if ligne.strip():
-                e = json.loads(ligne)
-                dernier[e["facture"]] = e
-    return {fid: e["tx_hash"] for fid, e in dernier.items() if e["statut"] == "envoye"}
+def _pending_sends(c: cfg.Config) -> dict[str, str]:
+    """Last status per invoice; 'sent' without 'confirmed'/'failed' = pending."""
+    last: dict[str, dict] = {}
+    if c.sends.exists():
+        for line in c.sends.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                s = json.loads(line)
+                last[s["invoice"]] = s
+    return {invoice_id: s["tx_hash"] for invoice_id, s in last.items() if s["status"] == "sent"}
 
 
-def _journaliser_envoi(c: cfg.Config, fid: str, tx_hash: str, statut: str) -> None:
-    ligne = {"facture": fid, "tx_hash": tx_hash, "statut": statut, "horodatage": datetime.now(timezone.utc).isoformat()}
-    with c.envois.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(ligne) + "\n")
+def _log_send(c: cfg.Config, invoice_id: str, tx_hash: str, status: str) -> None:
+    line = {"invoice": invoice_id, "tx_hash": tx_hash, "status": status, "timestamp": datetime.now(timezone.utc).isoformat()}
+    with c.sends.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(line) + "\n")
 
 
-def _chaine(c: cfg.Config) -> Chaine:
-    return Chaine(c.rpc_url, c.chain_id, c.min_base_fee_gwei)
+def _chain(c: cfg.Config) -> Chain:
+    return Chain(c.rpc_url, c.chain_id, c.min_base_fee_gwei)
 
 
 def cmd_init(c: cfg.Config, _args) -> None:
-    gl = GrandLivre(c.ledger)
-    if gl.a_un_apport():
-        raise SystemExit("Apport initial déjà enregistré.")
-    bloc, solde_wei = _chaine(c).solde_au_dernier_bloc(c.adresse_wallet)
-    solde = wei_vers_usdc(solde_wei)
-    aujourdhui = date.today()
-    gl.ajouter(
-        f'{aujourdhui} * "Apport initial" "Solde constaté sur Arc testnet"\n'
-        f'  nature: "apport"\n'
-        f"  {COMPTE_TRESORERIE}  {solde:f} USDC\n"
-        f"  {COMPTE_APPORT}  {-solde:f} USDC\n\n"
-        + constat_rapprochement(aujourdhui, COMPTE_TRESORERIE, solde, bloc)
+    ledger = Ledger(c.ledger)
+    if ledger.has_contribution():
+        raise SystemExit("Initial contribution already recorded.")
+    block, balance_wei = _chain(c).balance_at_latest_block(c.wallet_address)
+    balance = wei_to_usdc(balance_wei)
+    today = date.today()
+    ledger.append(
+        f'{today} * "Initial contribution" "Balance observed on Arc testnet"\n'
+        f'  kind: "contribution"\n'
+        f"  {TREASURY_ACCOUNT}  {balance:f} USDC\n"
+        f"  {CONTRIBUTION_ACCOUNT}  {-balance:f} USDC\n\n"
+        + reconciliation_record(today, TREASURY_ACCOUNT, balance, block)
     )
-    print(f"Apport initial enregistré : {solde:f} USDC")
+    print(f"Initial contribution recorded: {balance:f} USDC")
 
 
-def cmd_factures(c: cfg.Config, _args) -> None:
-    gl = GrandLivre(c.ledger)
-    comptabilisees, payees = gl.factures("facture"), gl.factures("paiement")
-    fournisseurs, commandes = _lire_json(c.fournisseurs), _lire_json(c.commandes)
-    for fid, f in _factures(c).items():
-        statut = "payée" if fid in payees else "comptabilisée" if fid in comptabilisees else "à comptabiliser"
-        print(f"{fid}  {f['montant']} USDC  {fournisseurs.get(f['fournisseur'], {}).get('nom', f['fournisseur'])}  [{statut}]")
-        for r in controler_facture(f, fournisseurs, commandes):
-            print(f"    REFUS : {r}")
+def cmd_invoices(c: cfg.Config, _args) -> None:
+    ledger = Ledger(c.ledger)
+    booked, paid = ledger.invoices("invoice"), ledger.invoices("payment")
+    vendors, purchase_orders = _read_json(c.vendors), _read_json(c.purchase_orders)
+    for invoice_id, i in _invoices(c).items():
+        status = "paid" if invoice_id in paid else "booked" if invoice_id in booked else "to book"
+        print(f"{invoice_id}  {i['amount']} USDC  {vendors.get(i['vendor'], {}).get('name', i['vendor'])}  [{status}]")
+        for r in check_invoice(i, vendors, purchase_orders):
+            print(f"    REFUSED: {r}")
 
 
-def cmd_comptabiliser(c: cfg.Config, args) -> None:
-    gl = GrandLivre(c.ledger)
-    facture = _facture(c, args.facture)
-    fournisseurs, commandes = _lire_json(c.fournisseurs), _lire_json(c.commandes)
-    if facture["id"] in gl.factures("facture"):
-        raise SystemExit(f"{facture['id']} est déjà comptabilisée.")
-    refus = controler_facture(facture, fournisseurs, commandes)
-    if refus:
-        raise SystemExit("Comptabilisation refusée :\n  " + "\n  ".join(refus))
-    fournisseur = fournisseurs[facture["fournisseur"]]
-    montant = Decimal(facture["montant"])
-    gl.ajouter(
-        f'{facture["date"]} * "{fournisseur["nom"]}" "Facture {facture["id"]} : {facture["libelle"]}"\n'
-        f'  nature: "facture"\n'
-        f'  facture: "{facture["id"]}"\n'
-        f'  commande: "{facture["commande"]}"\n'
-        f'  document: "{c.factures.relative_to(c.racine) / (facture["id"] + ".json")}"\n'
-        f"  {fournisseur['compte_charge']}  {montant:f} USDC\n"
-        f"  {COMPTE_FOURNISSEURS}  {-montant:f} USDC"
+def cmd_book(c: cfg.Config, args) -> None:
+    ledger = Ledger(c.ledger)
+    invoice = _invoice(c, args.invoice)
+    vendors, purchase_orders = _read_json(c.vendors), _read_json(c.purchase_orders)
+    if invoice["id"] in ledger.invoices("invoice"):
+        raise SystemExit(f"{invoice['id']} is already booked.")
+    refusals = check_invoice(invoice, vendors, purchase_orders)
+    if refusals:
+        raise SystemExit("Booking refused:\n  " + "\n  ".join(refusals))
+    vendor = vendors[invoice["vendor"]]
+    amount = Decimal(invoice["amount"])
+    ledger.append(
+        f'{invoice["date"]} * "{vendor["name"]}" "Invoice {invoice["id"]}: {invoice["description"]}"\n'
+        f'  kind: "invoice"\n'
+        f'  invoice: "{invoice["id"]}"\n'
+        f'  purchase_order: "{invoice["purchase_order"]}"\n'
+        f'  document: "{c.invoices.relative_to(c.root) / (invoice["id"] + ".json")}"\n'
+        f"  {vendor['expense_account']}  {amount:f} USDC\n"
+        f"  {PAYABLE_ACCOUNT}  {-amount:f} USDC"
     )
-    print(f"{facture['id']} comptabilisée : {montant:f} USDC dus à {fournisseur['nom']}")
+    print(f"{invoice['id']} booked: {amount:f} USDC owed to {vendor['name']}")
 
 
-def cmd_payer(c: cfg.Config, args) -> None:
-    gl = GrandLivre(c.ledger)
-    facture = _facture(c, args.facture)
-    fournisseurs, commandes = _lire_json(c.fournisseurs), _lire_json(c.commandes)
-    chaine = _chaine(c)
-    valeur_wei = usdc_vers_wei(Decimal(facture["montant"]))
+def cmd_pay(c: cfg.Config, args) -> None:
+    ledger = Ledger(c.ledger)
+    invoice = _invoice(c, args.invoice)
+    vendors, purchase_orders = _read_json(c.vendors), _read_json(c.purchase_orders)
+    chain = _chain(c)
+    value_wei = usdc_to_wei(Decimal(invoice["amount"]))
 
-    # Le référentiel est recontrôlé au moment de payer : il a pu changer depuis la comptabilisation.
-    refus = controler_facture(facture, fournisseurs, commandes) + controler_paiement(
-        facture,
-        comptabilisees=gl.factures("facture"),
-        payees=gl.factures("paiement"),
-        envois_en_attente=_envois_en_attente(c),
-        plafond=c.plafond_paiement,
-        solde_wei=chaine.solde_wei(c.adresse_wallet),
-        cout_max_wei=chaine.cout_max_wei(valeur_wei),
+    # The vendor master is checked again at payment time: it may have changed since booking.
+    refusals = check_invoice(invoice, vendors, purchase_orders) + check_payment(
+        invoice,
+        booked=ledger.invoices("invoice"),
+        paid=ledger.invoices("payment"),
+        pending_sends=_pending_sends(c),
+        max_payment=c.max_payment,
+        balance_wei=chain.balance_wei(c.wallet_address),
+        max_cost_wei=chain.max_cost_wei(value_wei),
     )
-    if refus:
-        raise SystemExit("Paiement refusé :\n  " + "\n  ".join(refus))
+    if refusals:
+        raise SystemExit("Payment refused:\n  " + "\n  ".join(refusals))
 
-    fournisseur = fournisseurs[facture["fournisseur"]]
-    destinataire = fournisseur["adresse"]
-    print(f"Plan : {facture['montant']} USDC ({valeur_wei} wei) de {c.adresse_wallet} vers {fournisseur['nom']} {destinataire}")
-    if not args.executer:
-        print("Simulation uniquement. Relancer avec --executer pour envoyer.")
+    vendor = vendors[invoice["vendor"]]
+    recipient = vendor["address"]
+    print(f"Plan: {invoice['amount']} USDC ({value_wei} wei) from {c.wallet_address} to {vendor['name']} {recipient}")
+    if not args.execute:
+        print("Dry run only. Run again with --execute to send.")
         return
 
-    cle = cfg.cle_privee()
-    if Account.from_key(cle).address.lower() != c.adresse_wallet.lower():
-        raise SystemExit("La clé privée ne correspond pas à wallet.address de config.toml.")
+    key = cfg.private_key()
+    if Account.from_key(key).address.lower() != c.wallet_address.lower():
+        raise SystemExit("The private key does not match wallet.address in config.toml.")
 
-    tx_hash = chaine.envoyer(cle, destinataire, valeur_wei)
-    _journaliser_envoi(c, facture["id"], tx_hash, "envoye")  # avant l'attente : un crash ici bloque tout nouvel essai
-    print(f"Envoyée : {c.explorer_url}/tx/{tx_hash}")
+    tx_hash = chain.send(key, recipient, value_wei)
+    _log_send(c, invoice["id"], tx_hash, "sent")  # before waiting: a crash here blocks any retry
+    print(f"Sent: {c.explorer_url}/tx/{tx_hash}")
 
-    succes, frais_wei, bloc = chaine.attendre(tx_hash)
-    frais = wei_vers_usdc(frais_wei)
-    montant = Decimal(facture["montant"])
-    if not succes:
-        _journaliser_envoi(c, facture["id"], tx_hash, "echec")
-        gl.ajouter(
-            f'{date.today()} * "Arc" "Échec paiement {facture["id"]} (gas seul)"\n'
+    success, fee_wei, block = chain.wait(tx_hash)
+    fee = wei_to_usdc(fee_wei)
+    amount = Decimal(invoice["amount"])
+    if not success:
+        _log_send(c, invoice["id"], tx_hash, "failed")
+        ledger.append(
+            f'{date.today()} * "Arc" "Failed payment {invoice["id"]} (gas only)"\n'
             f'  tx_hash: "{tx_hash}"\n'
-            f"  {COMPTE_GAS}  {frais:f} USDC\n"
-            f"  {COMPTE_TRESORERIE}  {-frais:f} USDC"
+            f"  {GAS_ACCOUNT}  {fee:f} USDC\n"
+            f"  {TREASURY_ACCOUNT}  {-fee:f} USDC"
         )
-        raise SystemExit(f"Transaction revert (bloc {bloc}) : seul le gas a été débité et enregistré.")
+        raise SystemExit(f"Transaction reverted (block {block}): only gas was charged and recorded.")
 
-    gl.ajouter(
-        f'{date.today()} * "{fournisseur["nom"]}" "Paiement {facture["id"]}"\n'
-        f'  nature: "paiement"\n'
-        f'  facture: "{facture["id"]}"\n'
+    ledger.append(
+        f'{date.today()} * "{vendor["name"]}" "Payment {invoice["id"]}"\n'
+        f'  kind: "payment"\n'
+        f'  invoice: "{invoice["id"]}"\n'
         f'  tx_hash: "{tx_hash}"\n'
-        f'  bloc: "{bloc}"\n'
-        f"  {COMPTE_FOURNISSEURS}  {montant:f} USDC\n"
-        f"  {COMPTE_GAS}  {frais:f} USDC\n"
-        f"  {COMPTE_TRESORERIE}  {-(montant + frais):f} USDC"
+        f'  block: "{block}"\n'
+        f"  {PAYABLE_ACCOUNT}  {amount:f} USDC\n"
+        f"  {GAS_ACCOUNT}  {fee:f} USDC\n"
+        f"  {TREASURY_ACCOUNT}  {-(amount + fee):f} USDC"
     )
-    _journaliser_envoi(c, facture["id"], tx_hash, "confirme")
-    print(f"Payée et comptabilisée (bloc {bloc}, gas {frais:f} USDC). Lancer `tameion rapprocher`.")
+    _log_send(c, invoice["id"], tx_hash, "confirmed")
+    print(f"Paid and recorded (block {block}, gas {fee:f} USDC). Run `tameion reconcile`.")
 
 
-def cmd_rapprocher(c: cfg.Config, _args) -> None:
-    gl = GrandLivre(c.ledger)
-    bloc, solde_wei = _chaine(c).solde_au_dernier_bloc(c.adresse_wallet)
-    onchain = wei_vers_usdc(solde_wei)
-    livre = gl.solde(COMPTE_TRESORERIE)
-    print(f"Solde onchain       : {onchain:f} USDC (bloc {bloc})")
-    print(f"Solde grand livre   : {livre} USDC")
-    if onchain != livre:
+def cmd_reconcile(c: cfg.Config, _args) -> None:
+    ledger = Ledger(c.ledger)
+    block, balance_wei = _chain(c).balance_at_latest_block(c.wallet_address)
+    onchain = wei_to_usdc(balance_wei)
+    booked = ledger.balance(TREASURY_ACCOUNT)
+    print(f"Onchain balance : {onchain:f} USDC (block {block})")
+    print(f"Ledger balance  : {booked} USDC")
+    if onchain != booked:
         raise SystemExit(
-            f"ÉCART de {onchain - livre} USDC : une opération manque ou est fausse dans le grand livre. "
-            "Rien n'a été écrit."
+            f"MISMATCH of {onchain - booked} USDC: an operation is missing or wrong in the ledger. "
+            "Nothing was written."
         )
-    gl.ajouter(constat_rapprochement(date.today(), COMPTE_TRESORERIE, onchain, bloc))
-    print(f"Rapproché : constat ajouté au grand livre (bloc {bloc}).")
+    ledger.append(reconciliation_record(date.today(), TREASURY_ACCOUNT, onchain, block))
+    print(f"Reconciled: record added to the ledger (block {block}).")
 
 
-def cmd_verifier(c: cfg.Config, _args) -> None:
-    erreurs = GrandLivre(c.ledger).verifier()
-    if erreurs:
-        raise SystemExit("Grand livre invalide :\n  " + "\n  ".join(erreurs))
-    print("Grand livre valide.")
+def cmd_check(c: cfg.Config, _args) -> None:
+    errors = Ledger(c.ledger).check()
+    if errors:
+        raise SystemExit("Invalid ledger:\n  " + "\n  ".join(errors))
+    print("Ledger is valid.")
 
 
 def main() -> None:
     p = argparse.ArgumentParser(prog="tameion")
-    sp = p.add_subparsers(dest="commande", required=True)
-    sp.add_parser("init", help="Enregistre l'apport initial à partir du solde onchain").set_defaults(fn=cmd_init)
-    sp.add_parser("factures", help="Liste les factures et les contrôles").set_defaults(fn=cmd_factures)
-    s = sp.add_parser("comptabiliser", help="Comptabilise une facture après contrôles")
-    s.add_argument("facture")
-    s.set_defaults(fn=cmd_comptabiliser)
-    s = sp.add_parser("payer", help="Paie une facture (simulation par défaut)")
-    s.add_argument("facture")
-    s.add_argument("--executer", action="store_true", help="Envoie réellement la transaction")
-    s.set_defaults(fn=cmd_payer)
-    sp.add_parser("rapprocher", help="Compare solde onchain et grand livre").set_defaults(fn=cmd_rapprocher)
-    sp.add_parser("verifier", help="Valide le grand livre avec beancount").set_defaults(fn=cmd_verifier)
+    sp = p.add_subparsers(dest="command", required=True)
+    sp.add_parser("init", help="Record the initial contribution from the onchain balance").set_defaults(fn=cmd_init)
+    sp.add_parser("invoices", help="List invoices and their controls").set_defaults(fn=cmd_invoices)
+    s = sp.add_parser("book", help="Book an invoice after controls")
+    s.add_argument("invoice")
+    s.set_defaults(fn=cmd_book)
+    s = sp.add_parser("pay", help="Pay an invoice (dry run by default)")
+    s.add_argument("invoice")
+    s.add_argument("--execute", action="store_true", help="Actually send the transaction")
+    s.set_defaults(fn=cmd_pay)
+    sp.add_parser("reconcile", help="Compare onchain balance with the ledger").set_defaults(fn=cmd_reconcile)
+    sp.add_parser("check", help="Validate the ledger with beancount").set_defaults(fn=cmd_check)
     args = p.parse_args()
-    args.fn(cfg.charger(), args)
+    args.fn(cfg.load(), args)

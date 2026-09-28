@@ -7,42 +7,42 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Config:
-    racine: Path
+    root: Path
     rpc_url: str
     chain_id: int
     explorer_url: str
     min_base_fee_gwei: int
-    adresse_wallet: str
-    plafond_paiement: Decimal
+    wallet_address: str
+    max_payment: Decimal
     ledger: Path
-    fournisseurs: Path
-    commandes: Path
-    factures: Path
-    envois: Path
+    vendors: Path
+    purchase_orders: Path
+    invoices: Path
+    sends: Path
 
 
-def charger(racine: Path | None = None) -> Config:
-    racine = racine or Path.cwd()
-    brut = tomllib.loads((racine / "config.toml").read_text(encoding="utf-8"))
-    chemins = brut["paths"]
+def load(root: Path | None = None) -> Config:
+    root = root or Path.cwd()
+    raw = tomllib.loads((root / "config.toml").read_text(encoding="utf-8"))
+    paths = raw["paths"]
     return Config(
-        racine=racine,
-        rpc_url=brut["chain"]["rpc_url"],
-        chain_id=brut["chain"]["chain_id"],
-        explorer_url=brut["chain"]["explorer_url"],
-        min_base_fee_gwei=brut["chain"]["min_base_fee_gwei"],
-        adresse_wallet=brut["wallet"]["address"],
-        plafond_paiement=Decimal(brut["controls"]["max_payment_usdc"]),
-        ledger=racine / chemins["ledger"],
-        fournisseurs=racine / chemins["fournisseurs"],
-        commandes=racine / chemins["commandes"],
-        factures=racine / chemins["factures"],
-        envois=racine / chemins["envois"],
+        root=root,
+        rpc_url=raw["chain"]["rpc_url"],
+        chain_id=raw["chain"]["chain_id"],
+        explorer_url=raw["chain"]["explorer_url"],
+        min_base_fee_gwei=raw["chain"]["min_base_fee_gwei"],
+        wallet_address=raw["wallet"]["address"],
+        max_payment=Decimal(raw["controls"]["max_payment_usdc"]),
+        ledger=root / paths["ledger"],
+        vendors=root / paths["vendors"],
+        purchase_orders=root / paths["purchase_orders"],
+        invoices=root / paths["invoices"],
+        sends=root / paths["sends"],
     )
 
 
-def cle_privee() -> str:
-    cle = os.environ.get("TAMEION_PRIVATE_KEY")
-    if not cle:
-        raise SystemExit("TAMEION_PRIVATE_KEY absente de l'environnement (voir README).")
-    return cle
+def private_key() -> str:
+    key = os.environ.get("TAMEION_PRIVATE_KEY")
+    if not key:
+        raise SystemExit("TAMEION_PRIVATE_KEY is not set in the environment (see README).")
+    return key

@@ -1,66 +1,72 @@
-# Tameion (squelette de test)
+# Tameion (test skeleton)
 
-Grand livre **beancount** + paiements **USDC natifs sur Arc testnet**, avec les contrôles recommandés
-par l'article *Agents and Ledgers in 2026*. Données factices, usage solo. Pas encore d'agent LLM :
-ce sont les rails sur lesquels il viendra se poser.
+A **beancount** ledger + **native USDC payments on Arc testnet**, with the controls recommended by the
+article *Agents and Ledgers in 2026*. Fake data, solo use. No LLM agent yet: these are the rails
+it will run on.
 
-## Principe
+## How it works
 
 ```
-facture (data/factures) ─► contrôles ─► écriture beancount ─► paiement Arc ─► écriture beancount ─► rapprochement onchain
+invoice (data/invoices) ─► controls ─► beancount entry ─► Arc payment ─► beancount entry ─► onchain reconciliation
 ```
 
-| Idée de l'article | Où c'est dans le code |
+| Idea from the article | Where it lives in the code |
 |---|---|
-| Rapprochement à trois (facture / commande / réception) | `controles.controler_facture` |
-| Contrôle des changements de coordonnées fournisseur | adresse de la facture comparée à `data/fournisseurs.json` ; on paie toujours l'adresse du référentiel |
-| Chaque écriture pointe vers un document | métadonnées `facture`, `commande`, `document`, `tx_hash` |
-| Un témoin avant d'écrire | `tameion rapprocher` compare le solde onchain (lu à un bloc précis) au grand livre, au wei près, et refuse en cas d'écart ; le constat est tracé par une directive `custom "rapprochement"` |
-| Refuser plutôt que réparer | `GrandLivre.ajouter` restaure le fichier si beancount le rejette ; montants en `Decimal`, 6 décimales exactes sur les factures, 18 pour le gas |
-| Idempotence / pas de double paiement | `data/envois.jsonl` est écrit **avant** d'attendre la confirmation ; un envoi non confirmé bloque tout nouvel essai |
-| Limites que l'outil ne contourne pas | plafond `max_payment_usdc` dans `config.toml` (côté code pour l'instant, pas encore dans un contrat) |
+| Three-way match (invoice / purchase order / goods receipt) | `controls.check_invoice` |
+| Vendor master change control | invoice address compared with `data/vendors.json`; payments always go to the vendor master address |
+| Every entry points to a document | `invoice`, `purchase_order`, `document`, `tx_hash` metadata |
+| A witness before writing | `tameion reconcile` compares the onchain balance (read at a precise block) with the ledger, to the wei, and refuses on any mismatch; the check is recorded as a `custom "reconciliation"` directive |
+| Refuse rather than repair | `Ledger.append` restores the file if beancount rejects it; amounts are `Decimal`, exactly 6 decimals on invoices, 18 for gas |
+| Idempotency / no double payment | `data/sends.jsonl` is written **before** waiting for confirmation; an unconfirmed send blocks any retry |
+| Limits the tool cannot bypass | `max_payment_usdc` cap in `config.toml` (enforced in code for now, not yet in a contract) |
 
-## Installation
+## Setup
 
 ```bash
 uv sync
 uv run pytest -q
 ```
 
-## Scénario
+## Walkthrough
 
 ```bash
-uv run tameion init                 # enregistre le solde onchain comme apport initial
-uv run tameion factures             # liste les factures ; F-003 est piégée (autre adresse, pas de réception)
-uv run tameion comptabiliser F-001
-uv run tameion payer F-001          # simulation : affiche le plan, n'envoie rien
+uv run tameion init                 # records the onchain balance as the initial contribution
+uv run tameion invoices             # lists invoices; F-003 is a trap (different address, no goods receipt)
+uv run tameion book F-001
+uv run tameion pay F-001            # dry run: prints the plan, sends nothing
 ```
 
-Pour payer vraiment, le programme lit la clé dans la variable d'environnement `TAMEION_PRIVATE_KEY`
-(il ne lit **pas** `.env` lui-même). Deux façons de la fournir :
+To actually pay, the program reads the key from the `TAMEION_PRIVATE_KEY` environment variable
+(it does **not** read `.env` itself). Two ways to provide it:
 
 ```bash
-# a) fichier .env (ignoré par git), chargé par uv à chaque commande
-cp .env.example .env                # puis y mettre la clé
-uv run --env-file .env tameion payer F-001 --executer
+# a) .env file (ignored by git), loaded by uv on each command
+cp .env.example .env                # then put the key in it
+uv run --env-file .env tameion pay F-001 --execute
 
-# b) variable exportée dans le terminal courant uniquement
+# b) variable exported in the current terminal only
 export TAMEION_PRIVATE_KEY=$(sed -n 's/^private_key: *//p' ~/.arc-canteen/wallet.yaml)
-uv run tameion payer F-001 --executer
-uv run tameion rapprocher           # solde onchain == grand livre, sinon ÉCART
-uv run tameion verifier
+uv run tameion pay F-001 --execute
 ```
 
-Expériences utiles :
-- relancer `payer F-001 --executer` : refusé (déjà payée) ;
-- `comptabiliser F-003` : refusé (adresse modifiée, réception absente) ;
-- envoyer quelques centimes depuis ton wallet hors outil, puis `rapprocher` : l'écart est détecté (erreur d'omission).
+Then:
 
-Visualiser le grand livre : `uvx fava ledger/main.beancount` (optionnel, non installé dans le projet).
+```bash
+uv run tameion reconcile            # onchain == ledger, otherwise MISMATCH
+uv run tameion check
+```
 
-## Limites connues
+Useful experiments:
+- run `pay F-001 --execute` again: refused (already paid);
+- `book F-003`: refused (changed address, no goods receipt);
+- send a few cents from your wallet outside the tool, or top it up from a faucet, then `reconcile`: the mismatch is detected.
 
-- Les adresses fournisseurs sont jetables (clés non conservées) : les USDC envoyés sont perdus, garder de petits montants.
-- Les rapprochements sont des directives `custom`, pas des assertions `balance` (qui valent pour une journée entière et
-  bloqueraient les opérations suivantes du même jour) : `bean-check` ne les revérifie pas, seul un nouveau `rapprocher` le fait.
-- Le plafond est appliqué par le code, pas encore par un smart contract (prochaine étape).
+View the ledger: `uvx fava ledger/main.beancount` (optional, not installed in the project).
+
+## Known limitations
+
+- Vendor addresses are throwaway (keys not kept): USDC sent to them is lost, keep amounts small.
+- Reconciliations are `custom` directives, not `balance` assertions (which hold for a whole day and would
+  block later operations on the same day): `bean-check` does not re-verify them, only a new `reconcile` does.
+- Incoming or outgoing funds moved outside the tool, and sends stuck in `sent`, must be recorded by hand.
+- The cap is enforced by code, not yet by a smart contract (next step).

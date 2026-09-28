@@ -1,0 +1,5 @@
+{
+  "PO-001": {"vendor": "studio-alpha", "amount": "0.250000", "description": "Landing page mockups", "received_on": "2026-09-25"},
+  "PO-002": {"vendor": "dev-beta", "amount": "0.400000", "description": "API integration", "received_on": "2026-09-26"},
+  "PO-003": {"vendor": "studio-alpha", "amount": "0.300000", "description": "Social media variants", "received_on": null}
+}
