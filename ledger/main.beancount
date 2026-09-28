@@ -55,3 +55,23 @@ option "operating_currency" "USDC"
 
 2026-09-28 custom "reconciliation" Assets:Arc:Treasury 24.498950000000000000 USDC
   block: "64492559"
+
+2026-09-27 * "Dev Beta" "Invoice F-002: API integration"
+  kind: "invoice"
+  invoice: "F-002"
+  purchase_order: "PO-002"
+  document: "data/invoices/F-002.json"
+  Expenses:Contractors:Development  0.400000 USDC
+  Liabilities:AccountsPayable  -0.400000 USDC
+
+2026-09-28 * "Dev Beta" "Payment F-002"
+  kind: "payment"
+  invoice: "F-002"
+  tx_hash: "0xb57b8e5e77202ff2d81a3cf254cf40f053616802dd674959030fb853924f0458"
+  block: "64492892"
+  Liabilities:AccountsPayable  0.400000 USDC
+  Expenses:Fees:Gas  0.000525000000000000 USDC
+  Assets:Arc:Treasury  -0.400525000000000000 USDC
+
+2026-09-28 custom "reconciliation" Assets:Arc:Treasury 24.098425000000000000 USDC
+  block: "64492908"
